@@ -17,9 +17,9 @@ jobs:
           JAEGER_VERSION=1.38.1
           echo "JAEGER_VERSION=$JAEGER_VERSION" >> $GITHUB_ENV
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
       - name: Make app dir
         run: mkdir -p appDir
       - name: Dowload bin files
@@ -27,13 +27,13 @@ jobs:
       - name: Extract Jaeger files
         run: tar -xf jaeger-${{ env.JAEGER_VERSION }}-linux-amd64.tar.gz
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: .
           file: Dockerfile
