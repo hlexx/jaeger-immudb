@@ -25,4 +25,4 @@ jobs:
       - name: Dowload bin files
         run: wget https://github.com/jaegertracing/jaeger/releases/download/v${{ env.JAEGER_VERSION }}/jaeger-${{ env.JAEGER_VERSION }}-linux-amd64.tar.gz
       - name: Extract files
-        run: tar -xf jaeger-${{ env.JAEGER_VERSION }}-linux-amd64.tar.gz -C /appDir
+        run: tar -xf jaeger-${{ env.JAEGER_VERSION }}-linux-amd64.tar.gz -C appDir
