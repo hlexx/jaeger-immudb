@@ -1,1 +1,6 @@
 /temp-data/
+/.idea/
+/dist/
+/db/
+/logs/
+/tests/
