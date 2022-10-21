@@ -1,0 +1,5 @@
+host: 0.0.0.0
+port: 3322
+database: jaeger
+user: immudb
+pwd: immudb
