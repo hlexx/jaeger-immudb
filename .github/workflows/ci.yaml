@@ -18,6 +18,22 @@ jobs:
           echo "JAEGER_VERSION=$JAEGER_VERSION" >> $GITHUB_ENV
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+      - name: Tidy
+        run: go mod tidy -compat=1.17
+      - name: Build
+        run: |
+          PROJECT_NAME=exporter
+          CGO_ENABLED=0
+          GOOS=linux
+          GOARCH=amd64
+          BINARY_NAME=$PROJECT_NAME-$GOOS-$GOARCH
+          echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
+          go build -ldflags '-extldflags "-static"' -o "$BINARY_NAME" cmd/badger-exporter/exporter.go
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Make app dir
@@ -39,5 +55,7 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64
           push: true
-          build-args: APP_DIR=jaeger-${{ env.JAEGER_VERSION }}-linux-amd64
+          build-args:
+          - APP_DIR=jaeger-${{ env.JAEGER_VERSION }}-linux-amd64
+          - EXPORTER_BIN=${{ env.BINARY_NAME }}
           tags: ghcr.io/hlexx/jaeger-immudb/${{ github.job }}:latest
