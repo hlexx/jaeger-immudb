@@ -9,11 +9,13 @@ import (
 	"github.com/hlexx/jaeger-immudb/pkg/utils"
 	"io/ioutil"
 	"os"
+	"time"
 )
 
 var (
 	originalPath = "bdata"
 	configPath   string
+	sleepTime    = time.Second * 10
 )
 
 func main() {
@@ -22,26 +24,29 @@ func main() {
 		Level:      hclog.Warn,
 		JSONFormat: true,
 	})
-	flag.StringVar(&configPath, "config", "", "The absolute path to the plugin's configuration file")
+	flag.StringVar(&configPath, "config", "plugin-config.yaml", "The absolute path to the plugin's configuration file")
 	flag.Parse()
 	driver, err := immudbStore.New(configPath)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to load config file %v", err.Error()))
 		return
 	}
-	logger.Warn("Init immune config file")
+	logger.Warn("Init immudb config file")
 	for {
 		logger.Warn("init tempDir")
 		file, err := ioutil.TempDir(os.TempDir(), "bdata")
 		if err != nil {
 			logger.Error(fmt.Sprintf("failed create tempfile %v", err.Error()))
-			return
+			time.Sleep(sleepTime)
+			continue
 		}
 		logger.Warn("copy badger dir")
 		err = utils.CopyDir(originalPath, file)
 		if err != nil {
 			logger.Error(fmt.Sprintf("failed to copy dir %v", err.Error()))
-			return
+			time.Sleep(sleepTime)
+			os.RemoveAll(file)
+			continue
 		}
 		path := fmt.Sprintf("%s/key", file)
 		logger.Warn("export data  to immudb")
@@ -50,12 +55,17 @@ func main() {
 		opts.ValueDir = fmt.Sprintf("%s/value", file)
 		store, err := badgerV3.Open(opts)
 		if err != nil {
-			return
+			logger.Error(fmt.Sprintf("failed badger open %v", err.Error()))
+			time.Sleep(sleepTime)
+			os.RemoveAll(file)
+			continue
 		}
 		err = driver.ImportFromBackup(store)
 		if err != nil {
 			logger.Error(fmt.Sprintf("failed import from backup %v", err.Error()))
-			return
+			time.Sleep(sleepTime)
+			os.RemoveAll(file)
+			continue
 		}
 		os.RemoveAll(file)
 	}

@@ -1,6 +1,6 @@
 FROM ubuntu
 ARG APP_DIR=temp-data
-ARG EXPORTER_BIN=exporter
+ARG EXPORTER_BIN=${APP_DIR}/exporter
 ENV SPAN_STORAGE_TYPE=badger
 COPY sampling.json sampling.json
 COPY ${EXPORTER_BIN} exporter
