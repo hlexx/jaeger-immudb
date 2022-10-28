@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "menuEnabled": false
+  },
+   "search": {
+    "maxLimit": 10000
+  },
+  "tracking": {
+    "gaID": "UI-000000-1",
+    "trackErrors": false
+  }
+}
