@@ -18,7 +18,7 @@ func main() {
 		Level:      hclog.Warn,
 		JSONFormat: true,
 	})
-	flag.StringVar(&configPath, "config", "plugin-config.yaml", "The absolute path to the plugin's configuration file")
+	flag.StringVar(&configPath, "config", "cfg/plugin-config.yaml", "The absolute path to the plugin's configuration file")
 	flag.Parse()
 	logger.Warn("Init immudb config file")
 	driver, err := immudbStorage.New(configPath)
