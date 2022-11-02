@@ -17,7 +17,6 @@ import (
 	"github.com/jaegertracing/jaeger/storage/spanstore"
 	"io/ioutil"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -32,7 +31,6 @@ const (
 )
 
 var (
-	mtx    sync.Mutex
 	tables = []string{
 		spansTable,
 		operationsTable,
@@ -445,9 +443,10 @@ func (driver *ImmuDbDriver) ImportFromBackup(db *badgerV3.DB) error {
 		return err
 	}
 	bWriter := BWriter{client: driver, cacheBackup: cache}
+	defer db.Close()
 	_, err = db.Backup(&bWriter, 1)
 	if err != nil {
 		return err
 	}
-	return nil
+	return db.Close()
 }
