@@ -15,3 +15,5 @@ query-run-help:
 	${JAEGER_QUERY} env
 collector-run-help:
 	${JAEGER_COLLECTOR} -h
+run-docker-immudb:
+	docker run -it --rm --name immudb -p 3322:3322 codenotary/immudb:latest
