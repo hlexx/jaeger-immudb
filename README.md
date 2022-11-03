@@ -8,7 +8,7 @@
 
 ## CI/CD
 [![Go](https://github.com//hlexx/jaeger-immudb/workflows/ci.yaml/badge.svg)](https://github.com//hlexx/jaeger-immudb/workflows/ci.yaml)
-![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Win-blue)
+![Platform](https://img.shields.io/badge/platform-Linux%20-blue)
 ![GitHub go.mod Go version (subdirectory of monorepo)](https://img.shields.io/github/go-mod/go-version//hlexx/jaeger-immudb)
 [![GitHub release](https://img.shields.io/github/v/release//hlexx/jaeger-immudb)](https://github.com//hlexx/jaeger-immudb/releases/latest)
 
