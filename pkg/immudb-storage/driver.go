@@ -174,6 +174,9 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	var KVList []*schema.KeyValue
 	for _, tag := range sp.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s-%s-%s", tagsTable, tag.Key, tag.Value(), traceId, spanId)
+		if len(indexTag) >= 1024 {
+			continue
+		}
 		KVList = append(KVList, &schema.KeyValue{
 			Key:   []byte(indexTag),
 			Value: utils.ToJsonBytes(spanIndex.Id),
@@ -181,6 +184,9 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	}
 	for _, tag := range sp.Process.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s-%s-%s", tagsTable, tag.Key, tag.Value(), traceId, spanId)
+		if len(indexTag) >= 1024 {
+			continue
+		}
 		KVList = append(KVList, &schema.KeyValue{
 			Key:   []byte(indexTag),
 			Value: utils.ToJsonBytes(spanIndex.Id),

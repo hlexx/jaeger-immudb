@@ -28,15 +28,36 @@
 
 ## 🚀 Запуск сервиса
 
-1. Запуск immudb 
+
+1. Установить пакет
+``` bash 
+go get github.com/hlexx/jaeger-immudb
+   ```
+
+2. Запуск immudb 
 ``` bash 
 docker run -it --rm --name immudb -p 3322:3322 codenotary/immudb:latest
    ```
-2. Запуск Jaeger Collector
+3.Запуск Jaeger Collector
 ``` bash 
 docker pull ghcr.io/hlexx/jaeger-immudb/collector:latest
    ```
-3. Запуск плагина Query
+4. Запуск плагина Query
 ``` bash 
 docker pull ghcr.io/hlexx/jaeger-immudb/query:latest
+   ```
+
+## Пример добавления трейса в Jaeger
+``` bash 
+package main
+
+import (
+   "github.com/google/uuid"
+   log "github.com/hlexx/jaeger-immudb/pkg/trace"
+)
+
+func main() {
+   id := uuid.NewString()
+   log.Trace(id, "service", map[string]string{})
+}
    ```
