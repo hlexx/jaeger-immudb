@@ -69,5 +69,6 @@ func main() {
 		}
 		os.RemoveAll(file)
 		logger.Warn("remove dir")
+		time.Sleep(sleepTime)
 	}
 }

@@ -443,7 +443,6 @@ func (driver *ImmuDbDriver) ImportFromBackup(db *badgerV3.DB) error {
 		return err
 	}
 	bWriter := BWriter{client: driver, cacheBackup: cache}
-	defer db.Close()
 	_, err = db.Backup(&bWriter, 1)
 	if err != nil {
 		return err
