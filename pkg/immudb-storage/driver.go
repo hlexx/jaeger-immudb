@@ -29,6 +29,7 @@ const (
 	servicesTable   = "services"
 	tagsTable       = "tags"
 	ttl             = time.Hour * 24
+	MaxKeyLen       = 1024
 )
 
 var (
@@ -179,7 +180,7 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	for _, tag := range sp.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s-%s-%s", tagsTable, tag.Key, tag.Value(), traceId, spanId)
 		bytesTag := []byte(indexTag)
-		if len(bytesTag) == 1024 {
+		if len(bytesTag) >= MaxKeyLen {
 			continue
 		}
 		KVList = append(KVList, &schema.KeyValue{
@@ -190,7 +191,7 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	for _, tag := range sp.Process.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s-%s-%s", tagsTable, tag.Key, tag.Value(), traceId, spanId)
 		bytesTag := []byte(indexTag)
-		if len(bytesTag) == 1024 {
+		if len(bytesTag) >= MaxKeyLen {
 			continue
 		}
 		KVList = append(KVList, &schema.KeyValue{
