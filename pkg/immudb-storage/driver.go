@@ -17,6 +17,7 @@ import (
 	"github.com/jaegertracing/jaeger/storage/spanstore"
 	"io/ioutil"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,6 +32,7 @@ const (
 )
 
 var (
+	mtx    sync.Mutex
 	tables = []string{
 		spansTable,
 		operationsTable,
@@ -78,12 +80,13 @@ func New(cfgPath string) (*ImmuDbDriver, error) {
 }
 
 func (driver *ImmuDbDriver) CreateDataBase() error {
-	err := driver.connect()
+	client, err := driver.OpenSession()
+	defer client.CloseSession(context.Background())
 	if err != nil {
 		return err
 	}
 	for _, table := range tables {
-		_, err = driver.Client.CreateDatabaseV2(context.Background(), table, nil)
+		_, err = client.CreateDatabaseV2(context.Background(), table, nil)
 		if err != nil && err.Error() != "database already exists" {
 			return err
 		}
@@ -91,33 +94,31 @@ func (driver *ImmuDbDriver) CreateDataBase() error {
 	return nil
 }
 
-func (driver *ImmuDbDriver) connect(database ...string) error {
+func (driver *ImmuDbDriver) OpenSession(database ...string) (immudb.ImmuClient, error) {
 	initDatabase := immudb.DefaultDB
 	ctx := context.Background()
 	if len(database) > 0 {
 		initDatabase = database[0]
 	}
-	if driver.Client == nil {
-		opts := immudb.DefaultOptions().
-			WithAddress(driver.cfg.Host).
-			WithPort(driver.cfg.Port).
-			WithMetrics(false)
-		client := immudb.NewClient().WithOptions(opts)
-		err := client.OpenSession(ctx, []byte(driver.cfg.User), []byte(driver.cfg.Pwd), initDatabase)
-		if err != nil {
-			return err
-		}
-		driver.Client = client
-	}
-	return nil
-}
-
-func (driver *ImmuDbDriver) GetOperations(ctx context.Context, query spanstore.OperationQueryParameters) ([]spanstore.Operation, error) {
-	err := driver.connect()
+	opts := immudb.DefaultOptions().
+		WithAddress(driver.cfg.Host).
+		WithPort(driver.cfg.Port).
+		WithMetrics(false)
+	client := immudb.NewClient().WithOptions(opts)
+	err := client.OpenSession(ctx, []byte(driver.cfg.User), []byte(driver.cfg.Pwd), initDatabase)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := driver.Client.Scan(ctx, &schema.ScanRequest{
+	return client, nil
+}
+
+func (driver *ImmuDbDriver) GetOperations(ctx context.Context, query spanstore.OperationQueryParameters) ([]spanstore.Operation, error) {
+	client, err := driver.OpenSession()
+	defer client.CloseSession(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Scan(ctx, &schema.ScanRequest{
 		Prefix: []byte(fmt.Sprintf("%s", operationsTable)),
 	})
 	if err != nil {
@@ -136,11 +137,12 @@ func (driver *ImmuDbDriver) GetOperations(ctx context.Context, query spanstore.O
 }
 
 func (driver *ImmuDbDriver) GetServices(ctx context.Context) ([]string, error) {
-	err := driver.connect()
+	client, err := driver.OpenSession()
+	defer client.CloseSession(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	resp, err := driver.Client.Scan(ctx, &schema.ScanRequest{
+	resp, err := client.Scan(ctx, &schema.ScanRequest{
 		Prefix: []byte(fmt.Sprintf("%s", servicesTable)),
 	})
 	if err != nil {
@@ -154,8 +156,10 @@ func (driver *ImmuDbDriver) GetServices(ctx context.Context) ([]string, error) {
 }
 
 func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error {
+	client, err := driver.OpenSession()
+	defer client.CloseSession(context.Background())
 	sp := model.Span{}
-	err := sp.Unmarshal(value)
+	err = sp.Unmarshal(value)
 	if err != nil {
 		return err
 	}
@@ -166,7 +170,7 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	spanId := sp.SpanID
 	spanKey := fmt.Sprintf("%s-%s-%s", spansTable, traceId, spanId)
 	/*begin transaction*/
-	spanIndex, err := driver.Client.VerifiedSet(ctx, []byte(spanKey), value)
+	spanIndex, err := client.VerifiedSet(ctx, []byte(spanKey), value)
 	if err != nil {
 		driver.logger.Error("add span err: %v", err)
 		return err
@@ -174,9 +178,6 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	var KVList []*schema.KeyValue
 	for _, tag := range sp.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s-%s-%s", tagsTable, tag.Key, tag.Value(), traceId, spanId)
-		if len(indexTag) >= 1024 {
-			continue
-		}
 		KVList = append(KVList, &schema.KeyValue{
 			Key:   []byte(indexTag),
 			Value: utils.ToJsonBytes(spanIndex.Id),
@@ -184,21 +185,18 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	}
 	for _, tag := range sp.Process.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s-%s-%s", tagsTable, tag.Key, tag.Value(), traceId, spanId)
-		if len(indexTag) >= 1024 {
-			continue
-		}
 		KVList = append(KVList, &schema.KeyValue{
 			Key:   []byte(indexTag),
 			Value: utils.ToJsonBytes(spanIndex.Id),
 		})
 	}
 	setRequest := &schema.SetRequest{KVs: KVList}
-	_, err = driver.Client.SetAll(ctx, setRequest)
+	_, err = client.SetAll(ctx, setRequest)
 	if err != nil {
 		return err
 	}
 	startTime := sp.StartTime.Unix()
-	_, err = driver.Client.ZAddAt(ctx, []byte(indexStartTime), float64(startTime), []byte(spanKey), spanIndex.Id)
+	_, err = client.ZAddAt(ctx, []byte(indexStartTime), float64(startTime), []byte(spanKey), spanIndex.Id)
 	if err != nil {
 		driver.logger.Error("add [indexStartTime] to trace meta data err: ", err)
 		return err
@@ -209,14 +207,14 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 		SpanKind: spanKind,
 	}
 	operationKey := fmt.Sprintf("%s-%s", operationsTable, operation.Name)
-	_, err = driver.Client.VerifiedSet(ctx, []byte(operationKey), utils.ToJsonBytes(operation))
+	_, err = client.VerifiedSet(ctx, []byte(operationKey), utils.ToJsonBytes(operation))
 	if err != nil {
 		driver.logger.Error("add operation err: %v", err)
 		return err
 	}
 	serviceName := sp.Process.ServiceName
 	serviceKey := fmt.Sprintf("%s-%s", servicesTable, serviceName)
-	_, err = driver.Client.VerifiedSet(ctx, []byte(serviceKey), []byte(serviceName))
+	_, err = client.VerifiedSet(ctx, []byte(serviceKey), []byte(serviceName))
 	if err != nil {
 		driver.logger.Error("add service err: %v", err)
 		return err
@@ -224,19 +222,20 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	return nil
 }
 func (driver *ImmuDbDriver) FindTraces(ctx context.Context, query *spanstore.TraceQueryParameters) ([]*model.Trace, error) {
-	err := driver.connect()
-	if err != nil {
-		return nil, err
-	}
 	if len(query.Tags) <= 0 {
 		return driver.FindTracesTime(ctx, query)
+	}
+	client, err := driver.OpenSession()
+	defer client.CloseSession(context.Background())
+	if err != nil {
+		return nil, err
 	}
 	scanOpts := &schema.ScanRequest{}
 	for k, v := range query.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s", tagsTable, k, v)
 		scanOpts.Prefix = []byte(indexTag)
 	}
-	resp, err := driver.Client.Scan(ctx, scanOpts)
+	resp, err := client.Scan(ctx, scanOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -250,18 +249,19 @@ func (driver *ImmuDbDriver) FindTraces(ctx context.Context, query *spanstore.Tra
 		if err != nil {
 			return nil, err
 		}
-		err = driver.connect()
+		client, err := driver.OpenSession()
+		defer client.CloseSession(context.Background())
 		if err != nil {
 			return nil, err
 		}
-		txByID, err := driver.Client.TxByID(context.Background(), txId)
+		txByID, err := client.TxByID(context.Background(), txId)
 		if err != nil {
 			return nil, err
 		}
 		kvEntries := txByID.GetEntries()
 		for _, kvEntry := range kvEntries {
 			var span model.Span
-			get, err := driver.Client.Get(ctx, kvEntry.Key)
+			get, err := client.Get(ctx, kvEntry.Key)
 			if err != nil {
 				return nil, err
 			}
@@ -280,12 +280,13 @@ func (driver *ImmuDbDriver) FindTraces(ctx context.Context, query *spanstore.Tra
 }
 
 func (driver *ImmuDbDriver) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
-	err := driver.connect()
+	client, err := driver.OpenSession()
+	defer client.CloseSession(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	traceId := traceID.String()
-	resp, err := driver.Client.Scan(ctx, &schema.ScanRequest{
+	resp, err := client.Scan(ctx, &schema.ScanRequest{
 		Prefix: []byte(fmt.Sprintf("%s-%s", spansTable, traceId)),
 	})
 	if err != nil {
@@ -306,11 +307,12 @@ func (driver *ImmuDbDriver) GetTrace(ctx context.Context, traceID model.TraceID)
 }
 
 func (driver *ImmuDbDriver) GetAllSpan(ctx context.Context) ([]*model.Span, error) {
-	err := driver.connect()
+	client, err := driver.OpenSession()
 	if err != nil {
 		return nil, err
 	}
-	resp, err := driver.Client.Scan(ctx, &schema.ScanRequest{
+	defer client.CloseSession(context.Background())
+	resp, err := client.Scan(ctx, &schema.ScanRequest{
 		Limit: 100,
 	})
 	if err != nil {
@@ -330,6 +332,11 @@ func (driver *ImmuDbDriver) GetAllSpan(ctx context.Context) ([]*model.Span, erro
 }
 
 func (driver *ImmuDbDriver) FindTracesTime(ctx context.Context, query *spanstore.TraceQueryParameters) ([]*model.Trace, error) {
+	client, err := driver.OpenSession()
+	if err != nil {
+		return nil, err
+	}
+	defer client.CloseSession(context.Background())
 	chunks, err := driver.scanRangeIndex(ctx, query)
 	if err != nil {
 		return nil, err
@@ -342,7 +349,7 @@ func (driver *ImmuDbDriver) FindTracesTime(ctx context.Context, query *spanstore
 			Spans: []*model.Span{},
 		}
 		for {
-			response, err := driver.Client.Scan(ctx, &schema.ScanRequest{
+			response, err := client.Scan(ctx, &schema.ScanRequest{
 				Prefix: []byte(k),
 				Limit:  uint64(limit),
 				Offset: uint64(offset),
@@ -376,6 +383,12 @@ func (driver *ImmuDbDriver) FindTracesTime(ctx context.Context, query *spanstore
 }
 
 func (driver *ImmuDbDriver) scanRangeIndex(ctx context.Context, query *spanstore.TraceQueryParameters) (map[string]int, error) {
+	client, err := driver.OpenSession()
+	if err != nil {
+		driver.logger.Warn("scan time failed", err.Error())
+		return nil, err
+	}
+	defer client.CloseSession(context.Background())
 	var zScanOpts *schema.ZScanRequest
 	offset := 0
 	limit := 999
@@ -389,7 +402,7 @@ func (driver *ImmuDbDriver) scanRangeIndex(ctx context.Context, query *spanstore
 			MinScore: &schema.Score{Score: float64(query.StartTimeMin.Unix())},
 			MaxScore: &schema.Score{Score: float64(query.StartTimeMax.Unix())},
 		}
-		resp, err := driver.Client.ZScan(ctx, zScanOpts)
+		resp, err := client.ZScan(ctx, zScanOpts)
 		if err != nil {
 			return nil, err
 		}
@@ -414,10 +427,6 @@ func (receiver *BWriter) Write(p []byte) (n int, err error) {
 	err = proto.Unmarshal(p, &list)
 	if err != nil {
 		return 0, err
-	}
-	err = receiver.client.connect()
-	if err != nil {
-		return
 	}
 	for _, kv := range list.Kv {
 		if kv.Key == nil || kv.Value == nil {
