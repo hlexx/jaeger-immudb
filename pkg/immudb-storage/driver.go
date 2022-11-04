@@ -178,15 +178,23 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	var KVList []*schema.KeyValue
 	for _, tag := range sp.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s-%s-%s", tagsTable, tag.Key, tag.Value(), traceId, spanId)
+		bytesTag := []byte(indexTag)
+		if len(bytesTag) == 1024 {
+			continue
+		}
 		KVList = append(KVList, &schema.KeyValue{
-			Key:   []byte(indexTag),
+			Key:   bytesTag,
 			Value: utils.ToJsonBytes(spanIndex.Id),
 		})
 	}
 	for _, tag := range sp.Process.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s-%s-%s", tagsTable, tag.Key, tag.Value(), traceId, spanId)
+		bytesTag := []byte(indexTag)
+		if len(bytesTag) == 1024 {
+			continue
+		}
 		KVList = append(KVList, &schema.KeyValue{
-			Key:   []byte(indexTag),
+			Key:   bytesTag,
 			Value: utils.ToJsonBytes(spanIndex.Id),
 		})
 	}
