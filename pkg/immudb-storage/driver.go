@@ -29,6 +29,7 @@ const (
 	servicesTable   = "services"
 	tagsTable       = "tags"
 	ttl             = time.Hour * 24
+	maxKeyLength    = 1024
 )
 
 var (
@@ -179,7 +180,7 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	for _, tag := range sp.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s-%s-%s", tagsTable, tag.Key, tag.Value(), traceId, spanId)
 		bytesTag := []byte(indexTag)
-		if len(bytesTag) == 1024 {
+		if len(bytesTag) >= maxKeyLength {
 			continue
 		}
 		KVList = append(KVList, &schema.KeyValue{
@@ -190,7 +191,7 @@ func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error
 	for _, tag := range sp.Process.Tags {
 		indexTag := fmt.Sprintf("%s-%s-%s-%s-%s", tagsTable, tag.Key, tag.Value(), traceId, spanId)
 		bytesTag := []byte(indexTag)
-		if len(bytesTag) == 1024 {
+		if len(bytesTag) >= maxKeyLength {
 			continue
 		}
 		KVList = append(KVList, &schema.KeyValue{
@@ -387,7 +388,7 @@ func (driver *ImmuDbDriver) FindTracesTime(ctx context.Context, query *spanstore
 			traces = append(traces, trace)
 		}
 	}
-	return traces, nil
+	return traces[0:query.NumTraces], nil
 }
 
 func (driver *ImmuDbDriver) scanRangeIndex(ctx context.Context, query *spanstore.TraceQueryParameters) (map[string]int, error) {
