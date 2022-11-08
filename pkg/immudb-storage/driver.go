@@ -352,7 +352,7 @@ func (driver *ImmuDbDriver) FindTracesTime(ctx context.Context, query *spanstore
 	}
 	limit := 999
 	var traces []*model.Trace
-	for k, _ := range chunks {
+	for _, k := range chunks.Keys() {
 		offset := 0
 		trace := &model.Trace{
 			Spans: []*model.Span{},
@@ -385,13 +385,16 @@ func (driver *ImmuDbDriver) FindTracesTime(ctx context.Context, query *spanstore
 			offset += limit
 		}
 		if len(trace.Spans) > 0 {
+			if len(traces) > query.NumTraces-1 {
+				break
+			}
 			traces = append(traces, trace)
 		}
 	}
 	return traces, nil
 }
 
-func (driver *ImmuDbDriver) scanRangeIndex(ctx context.Context, query *spanstore.TraceQueryParameters) (map[string]int, error) {
+func (driver *ImmuDbDriver) scanRangeIndex(ctx context.Context, query *spanstore.TraceQueryParameters) (*utils.SortedMap, error) {
 	client, err := driver.OpenSession()
 	if err != nil {
 		driver.logger.Warn("scan time failed", err.Error())
@@ -401,7 +404,7 @@ func (driver *ImmuDbDriver) scanRangeIndex(ctx context.Context, query *spanstore
 	var zScanOpts *schema.ZScanRequest
 	offset := 0
 	limit := 999
-	chunks := map[string]int{}
+	chunks := utils.NewMap()
 	for {
 		zScanOpts = &schema.ZScanRequest{
 			Set:      []byte(indexStartTime),
@@ -421,7 +424,7 @@ func (driver *ImmuDbDriver) scanRangeIndex(ctx context.Context, query *spanstore
 		for _, entry := range resp.Entries {
 			items := strings.Split(string(entry.Key), "-")
 			tracePrefix := fmt.Sprintf("%s-%s", items[0], items[1])
-			chunks[tracePrefix] += 1
+			chunks.Set(tracePrefix, 1)
 		}
 		offset += limit
 	}

@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const maxValSize = 1 << 20
+
 func TestTrace(t *testing.T) {
 	t.Setenv("JAEGER_URL", "http://localhost:24268/api/traces")
 	type service struct {

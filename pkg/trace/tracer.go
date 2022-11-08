@@ -6,8 +6,11 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"sort"
 	"time"
 )
+
+const MaxSpanSize = 65000
 
 // Trace add trace to jaeger
 func Trace(id, component string, args map[string]string) {
@@ -32,8 +35,35 @@ func Trace(id, component string, args map[string]string) {
 	args["call.line"] = fmt.Sprintf("%d", call.Line)
 	args["call.function"] = call.FunctionName
 	var attKV []attribute.KeyValue
+	type item struct {
+		len int
+		k   string
+		v   string
+	}
+	var items []item
 	for k, v := range args {
-		attKV = append(attKV, attribute.String(k, v))
+		items = append(items, item{
+			len: len([]byte(k)) + len([]byte(v)),
+			k:   k,
+			v:   v,
+		})
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].len > items[j].len
+	})
+	for {
+		sum := 0
+		for _, item := range items {
+			sum += item.len
+		}
+		if sum > MaxSpanSize {
+			items = items[0:]
+			continue
+		}
+		break
+	}
+	for _, item := range items {
+		attKV = append(attKV, attribute.String(item.k, item.v))
 	}
 	if val, exists := args[ErrorKey]; exists {
 		span.SetStatus(codes.Error, val)
