@@ -45,7 +45,10 @@ func main() {
 		if err != nil {
 			logger.Error(fmt.Sprintf("failed to copy dir %v", err.Error()))
 			time.Sleep(sleepTime)
-			os.RemoveAll(file)
+			err := os.RemoveAll(file)
+			if err != nil {
+				logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
+			}
 			continue
 		}
 		path := fmt.Sprintf("%s/key", file)
@@ -57,17 +60,26 @@ func main() {
 		if err != nil {
 			logger.Error(fmt.Sprintf("failed badger open %v", err.Error()))
 			time.Sleep(sleepTime)
-			os.RemoveAll(file)
+			err := os.RemoveAll(file)
+			if err != nil {
+				logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
+			}
 			continue
 		}
 		err = driver.ImportFromBackup(store)
 		if err != nil {
 			logger.Error(fmt.Sprintf("failed import from backup %v", err.Error()))
 			time.Sleep(sleepTime)
-			os.RemoveAll(file)
+			err := os.RemoveAll(file)
+			if err != nil {
+				logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
+			}
 			continue
 		}
-		os.RemoveAll(file)
+		err = os.RemoveAll(file)
+		if err != nil {
+			logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
+		}
 		logger.Warn("remove dir")
 		time.Sleep(sleepTime)
 	}
