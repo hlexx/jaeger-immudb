@@ -158,10 +158,21 @@ func (driver *ImmuDbDriver) GetServices(ctx context.Context) ([]string, error) {
 
 func (driver *ImmuDbDriver) Writer(ctx context.Context, key, value []byte) error {
 	client, err := driver.OpenSession()
-	defer client.CloseSession(context.Background())
+	if err != nil {
+		driver.logger.Error("writer not open session err: %v", err)
+		return err
+	}
+	defer func() {
+		err := client.CloseSession(context.Background())
+		if err != nil {
+			driver.logger.Error("writer not close session err: %v", err)
+			return
+		}
+	}()
 	sp := model.Span{}
 	err = sp.Unmarshal(value)
 	if err != nil {
+		driver.logger.Error("writer not unmarshal value err: %v", err)
 		return err
 	}
 	if sp.Process == nil {
