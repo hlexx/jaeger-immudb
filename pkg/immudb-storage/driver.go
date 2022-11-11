@@ -449,7 +449,8 @@ func (receiver *BWriter) Write(p []byte) (n int, err error) {
 	}
 	err = proto.Unmarshal(p, &list)
 	if err != nil {
-		return 0, err
+		fmt.Printf("proto unmarshal error: %v\n", err.Error())
+		return
 	}
 	for _, kv := range list.Kv {
 		if kv.Key == nil || kv.Value == nil {
@@ -458,18 +459,21 @@ func (receiver *BWriter) Write(p []byte) (n int, err error) {
 		keyVersion := fmt.Sprintf("%d", kv.Version)
 		get, err := receiver.cacheBackup.Exist(keyVersion)
 		if err != nil {
-			return 0, err
+			fmt.Printf("cache backup exist error: %v\n", err.Error())
+			return n, nil
 		}
 		if get != nil {
 			continue
 		}
 		err = receiver.client.Writer(context.Background(), kv.Key, kv.Value)
 		if err != nil {
-			return 0, err
+			fmt.Printf("client write error: %v\n", err.Error())
+			return n, nil
 		}
 		err = receiver.cacheBackup.AddWithTTL(keyVersion, []byte(keyVersion), ttl)
 		if err != nil {
-			return 0, err
+			fmt.Printf("cache backup add with ttl error: %v\n", err.Error())
+			return n, nil
 		}
 	}
 	return
