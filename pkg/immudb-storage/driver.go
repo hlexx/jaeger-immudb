@@ -445,12 +445,12 @@ func (driver *ImmuDbDriver) scanRangeIndex(ctx context.Context, query *spanstore
 func (receiver *BWriter) Write(p []byte) (n int, err error) {
 	var list pb.KVList
 	if len(p) <= 8 {
-		return
+		return n, nil
 	}
 	err = proto.Unmarshal(p, &list)
 	if err != nil {
 		fmt.Printf("proto unmarshal error: %v\n", err.Error())
-		return
+		return n, nil
 	}
 	for _, kv := range list.Kv {
 		if kv.Key == nil || kv.Value == nil {
@@ -476,7 +476,7 @@ func (receiver *BWriter) Write(p []byte) (n int, err error) {
 			return n, nil
 		}
 	}
-	return
+	return n, nil
 }
 
 func (driver *ImmuDbDriver) ImportFromBackup(db *badgerV3.DB) error {
