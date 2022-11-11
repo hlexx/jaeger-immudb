@@ -8,6 +8,7 @@ import (
 	immudbStore "github.com/hlexx/jaeger-immudb/pkg/immudb-storage"
 	"github.com/hlexx/jaeger-immudb/pkg/utils"
 	"io/ioutil"
+	"math"
 	"os"
 	"time"
 )
@@ -60,6 +61,7 @@ func main() {
 			opts := badgerV3.DefaultOptions(path)
 			opts.SyncWrites = false
 			opts.ValueDir = fmt.Sprintf("%s/value", file)
+			opts.NumVersionsToKeep = math.MaxInt32
 			store, err := badgerV3.Open(opts)
 			if err != nil {
 				logger.Error(fmt.Sprintf("failed badger open %v", err.Error()))
