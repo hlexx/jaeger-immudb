@@ -68,6 +68,10 @@ func Test_BackupRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = db2.Sync()
+	if err != nil {
+		return
+	}
 	err = db2.Load(&backup, 1)
 	if err != nil {
 		t.Fatal(err)
