@@ -480,6 +480,10 @@ func (driver *ImmuDbDriver) ImportFromBackup(db *badgerV3.DB) error {
 	if err != nil {
 		return err
 	}
+	err = db.Sync()
+	if err != nil {
+		return err
+	}
 	bWriter := BWriter{client: driver, cacheBackup: cache}
 	_, err = db.Backup(&bWriter, 0)
 	if err != nil {
