@@ -28,7 +28,7 @@ const (
 	indexStartTime  = "startTime"
 	servicesTable   = "services"
 	tagsTable       = "tags"
-	ttl             = time.Hour * 24
+	ttl             = time.Minute * 62
 	MaxKeyLen       = 1024
 )
 
@@ -56,6 +56,7 @@ type ImmuDbDriver struct {
 }
 type BWriter struct {
 	client      *ImmuDbDriver
+	logger      hclog.Logger
 	cacheBackup *cached.Data
 }
 
@@ -449,9 +450,11 @@ func (receiver *BWriter) Write(p []byte) (n int, err error) {
 	}
 	err = proto.Unmarshal(p, &list)
 	if err != nil {
-		fmt.Printf("proto unmarshal error: %v\n", err.Error())
+		receiver.logger.Error(fmt.Sprintf("proto unmarshal error: %v\n", err.Error()))
 		return n, nil
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cancel()
 	for _, kv := range list.Kv {
 		if kv.Key == nil || kv.Value == nil {
 			continue
@@ -459,20 +462,20 @@ func (receiver *BWriter) Write(p []byte) (n int, err error) {
 		keyVersion := fmt.Sprintf("%d", kv.Version)
 		get, err := receiver.cacheBackup.Exist(keyVersion)
 		if err != nil {
-			fmt.Printf("cache backup exist error: %v\n", err.Error())
+			receiver.logger.Error(fmt.Sprintf("cache backup exist error: %v\n", err.Error()))
 			return n, nil
 		}
 		if get != nil {
 			continue
 		}
-		err = receiver.client.Writer(context.Background(), kv.Key, kv.Value)
+		err = receiver.client.Writer(ctx, kv.Key, kv.Value)
 		if err != nil {
-			fmt.Printf("client write error: %v\n", err.Error())
+			receiver.logger.Error(fmt.Sprintf("client write error: %v\n", err.Error()))
 			return n, nil
 		}
 		err = receiver.cacheBackup.AddWithTTL(keyVersion, []byte(keyVersion), ttl)
 		if err != nil {
-			fmt.Printf("cache backup add with ttl error: %v\n", err.Error())
+			receiver.logger.Error(fmt.Sprintf("cache backup add with ttl error: %v\n", err.Error()))
 			return n, nil
 		}
 	}
@@ -488,7 +491,7 @@ func (driver *ImmuDbDriver) ImportFromBackup(db *badgerV3.DB) error {
 	if err != nil {
 		return err
 	}
-	bWriter := BWriter{client: driver, cacheBackup: cache}
+	bWriter := BWriter{client: driver, cacheBackup: cache, logger: driver.logger}
 	_, err = db.Backup(&bWriter, 0)
 	if err != nil {
 		return err
