@@ -87,6 +87,7 @@ func main() {
 					if err != nil {
 						logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
 					}
+					cancel()
 					return
 				}
 				err = os.RemoveAll(file)
@@ -94,9 +95,9 @@ func main() {
 					logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
 				}
 				logger.Warn("remove dir")
+				cancel()
 			}()
 			<-ctx.Done()
-			cancel()
 			errC := ctx.Err()
 			logger.Warn(fmt.Sprintf("backup context done Err:[%v]", errC))
 			err = os.RemoveAll(file)
