@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestImmuDbDriver_OpenSession(t *testing.T) {
@@ -43,5 +44,20 @@ func TestImmuDbDriver_OpenSession(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDriver_Context(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	for {
+		select {
+		case tm := <-time.After(time.Second):
+			t.Logf("time ... %v", tm.Second())
+			time.Sleep(time.Second * 3)
+		case <-ctx.Done():
+			t.Logf("context  done...")
+			return
+		}
 	}
 }

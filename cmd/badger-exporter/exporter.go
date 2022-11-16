@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	badgerV3 "github.com/dgraph-io/badger/v3"
@@ -72,21 +73,36 @@ func main() {
 				}
 				continue
 			}
-			err = driver.ImportFromBackup(store)
-			if err != nil {
-				logger.Error(fmt.Sprintf("failed import from backup %v", err.Error()))
-				time.Sleep(sleepTime)
-				err := os.RemoveAll(file)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*2)
+			db := &immudbStore.BadgerDB{
+				Db:      store,
+				Context: ctx,
+			}
+			go func() {
+				err = driver.ImportFromBackup(db)
+				if err != nil {
+					logger.Error(fmt.Sprintf("failed import from backup %v", err.Error()))
+					time.Sleep(sleepTime)
+					err := os.RemoveAll(file)
+					if err != nil {
+						logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
+					}
+					return
+				}
+				err = os.RemoveAll(file)
 				if err != nil {
 					logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
 				}
-				continue
-			}
+				logger.Warn("remove dir")
+			}()
+			<-ctx.Done()
+			cancel()
+			errC := ctx.Err()
+			logger.Warn(fmt.Sprintf("backup context done Err:[%v]", errC))
 			err = os.RemoveAll(file)
 			if err != nil {
 				logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
 			}
-			logger.Warn("remove dir")
 			time.Sleep(sleepTime)
 		}
 	}

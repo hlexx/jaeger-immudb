@@ -54,10 +54,17 @@ type ImmuDbDriver struct {
 	logger hclog.Logger
 	Client immudb.ImmuClient
 }
+
+type BadgerDB struct {
+	Db      *badgerV3.DB
+	Context context.Context
+}
+
 type BWriter struct {
 	client      *ImmuDbDriver
 	logger      hclog.Logger
 	cacheBackup *cached.Data
+	context     context.Context
 }
 
 func New(cfgPath string) (*ImmuDbDriver, error) {
@@ -453,8 +460,6 @@ func (receiver *BWriter) Write(p []byte) (n int, err error) {
 		receiver.logger.Error(fmt.Sprintf("proto unmarshal error: %v\n", err.Error()))
 		return n, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*2)
-	defer cancel()
 	for _, kv := range list.Kv {
 		if kv.Key == nil || kv.Value == nil {
 			continue
@@ -468,7 +473,7 @@ func (receiver *BWriter) Write(p []byte) (n int, err error) {
 		if get != nil {
 			continue
 		}
-		err = receiver.client.Writer(ctx, kv.Key, kv.Value)
+		err = receiver.client.Writer(receiver.context, kv.Key, kv.Value)
 		if err != nil {
 			receiver.logger.Error(fmt.Sprintf("client write error: %v\n", err.Error()))
 			return n, nil
@@ -482,19 +487,24 @@ func (receiver *BWriter) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-func (driver *ImmuDbDriver) ImportFromBackup(db *badgerV3.DB) error {
+func (driver *ImmuDbDriver) ImportFromBackup(db *BadgerDB) error {
 	cache, err := cached.Connect("backup")
 	if err != nil {
 		return err
 	}
-	err = db.Sync()
+	err = db.Db.Sync()
 	if err != nil {
 		return err
 	}
-	bWriter := BWriter{client: driver, cacheBackup: cache, logger: driver.logger}
-	_, err = db.Backup(&bWriter, 0)
+	bWriter := BWriter{
+		client:      driver,
+		cacheBackup: cache,
+		logger:      driver.logger,
+		context:     db.Context,
+	}
+	_, err = db.Db.Backup(&bWriter, 0)
 	if err != nil {
 		return err
 	}
-	return db.Close()
+	return db.Db.Close()
 }
