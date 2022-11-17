@@ -58,6 +58,7 @@ type ImmuDbDriver struct {
 type BadgerDB struct {
 	Db      *badgerV3.DB
 	Context context.Context
+	Client  *ImmuDbDriver
 }
 
 type BWriter struct {
@@ -67,6 +68,27 @@ type BWriter struct {
 	context     context.Context
 }
 
+func (d *BadgerDB) Import() error {
+	cache, err := cached.Connect("backup")
+	if err != nil {
+		return err
+	}
+	err = d.Db.Sync()
+	if err != nil {
+		return err
+	}
+	bWriter := BWriter{
+		client:      d.Client,
+		cacheBackup: cache,
+		logger:      d.Client.logger,
+		context:     d.Context,
+	}
+	_, err = d.Db.Backup(&bWriter, 0)
+	if err != nil {
+		return err
+	}
+	return d.Db.Close()
+}
 func New(cfgPath string) (*ImmuDbDriver, error) {
 	logger := hclog.New(&hclog.LoggerOptions{
 		Name:       "jaeger",
