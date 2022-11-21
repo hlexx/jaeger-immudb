@@ -46,40 +46,40 @@ func main() {
 				time.Sleep(sleepTime)
 				continue
 			}
-			logger.Warn("copy badger dir")
-			err = utils.CopyDir(originalPath, file)
-			if err != nil {
-				logger.Error(fmt.Sprintf("failed to copy dir %v", err.Error()))
-				time.Sleep(sleepTime)
-				err := os.RemoveAll(file)
-				if err != nil {
-					logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
-				}
-				continue
-			}
-			path := fmt.Sprintf("%s/key", file)
-			logger.Warn("export data  to immudb")
-			opts := badgerV3.DefaultOptions(path)
-			opts.SyncWrites = false
-			opts.ValueDir = fmt.Sprintf("%s/value", file)
-			opts.NumVersionsToKeep = math.MaxInt32
-			store, err := badgerV3.Open(opts)
-			if err != nil {
-				logger.Error(fmt.Sprintf("failed badger open %v", err.Error()))
-				time.Sleep(sleepTime)
-				err := os.RemoveAll(file)
-				if err != nil {
-					logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
-				}
-				continue
-			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*2)
-			db := &immudbStore.BadgerDB{
-				Db:      store,
-				Context: ctx,
-				Client:  driver,
-			}
 			go func() {
+				logger.Warn("copy badger dir")
+				err = utils.CopyDir(originalPath, file)
+				if err != nil {
+					logger.Error(fmt.Sprintf("failed to copy dir %v", err.Error()))
+					time.Sleep(sleepTime)
+					err := os.RemoveAll(file)
+					if err != nil {
+						logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
+					}
+					return
+				}
+				path := fmt.Sprintf("%s/key", file)
+				logger.Warn("export data  to immudb")
+				opts := badgerV3.DefaultOptions(path)
+				opts.SyncWrites = false
+				opts.ValueDir = fmt.Sprintf("%s/value", file)
+				opts.NumVersionsToKeep = math.MaxInt32
+				store, err := badgerV3.Open(opts)
+				if err != nil {
+					logger.Error(fmt.Sprintf("failed badger open %v", err.Error()))
+					time.Sleep(sleepTime)
+					err := os.RemoveAll(file)
+					if err != nil {
+						logger.Error(fmt.Sprintf("path %v remove all %v", file, err.Error()))
+					}
+					return
+				}
+				db := &immudbStore.BadgerDB{
+					Db:      store,
+					Context: ctx,
+					Client:  driver,
+				}
 				err = db.Import()
 				if err != nil {
 					logger.Error(fmt.Sprintf("failed import from backup %v", err.Error()))
