@@ -60,7 +60,7 @@ func main() {
 					return
 				}
 				path := fmt.Sprintf("%s/key", file)
-				logger.Warn("export data  to immudb")
+				logger.Warn("export data to immudb")
 				opts := badgerV3.DefaultOptions(path)
 				opts.SyncWrites = false
 				opts.ValueDir = fmt.Sprintf("%s/value", file)

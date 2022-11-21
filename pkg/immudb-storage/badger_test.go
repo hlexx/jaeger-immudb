@@ -7,12 +7,21 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 var SeperatorA = []byte{':'}
 
 func Make(keys ...[]byte) []byte {
 	return bytes.Join(keys, SeperatorA)
+}
+
+func Test_Duration(t *testing.T) {
+	duration, err := time.ParseDuration("0h2m0s")
+	if err != nil {
+		return
+	}
+	println(duration.String())
 }
 
 func Test_BackupRestore(t *testing.T) {
