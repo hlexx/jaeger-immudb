@@ -77,9 +77,10 @@ func main() {
 			db := &immudbStore.BadgerDB{
 				Db:      store,
 				Context: ctx,
+				Client:  driver,
 			}
 			go func() {
-				err = driver.ImportFromBackup(db)
+				err = db.Import()
 				if err != nil {
 					logger.Error(fmt.Sprintf("failed import from backup %v", err.Error()))
 					time.Sleep(sleepTime)
