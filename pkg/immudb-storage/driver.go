@@ -387,6 +387,7 @@ func (driver *ImmuDbDriver) FindTracesTime(ctx context.Context, query *spanstore
 		return nil, err
 	}
 	defer client.CloseSession(context.Background())
+	operationName := query.OperationName
 	chunks, err := driver.scanRangeIndex(ctx, query)
 	if err != nil {
 		return nil, err
@@ -398,6 +399,7 @@ func (driver *ImmuDbDriver) FindTracesTime(ctx context.Context, query *spanstore
 		trace := &model.Trace{
 			Spans: []*model.Span{},
 		}
+
 		for {
 			response, err := client.Scan(ctx, &schema.ScanRequest{
 				Prefix: []byte(k),
@@ -429,7 +431,20 @@ func (driver *ImmuDbDriver) FindTracesTime(ctx context.Context, query *spanstore
 			if len(traces) > query.NumTraces-1 {
 				break
 			}
-			traces = append(traces, trace)
+			var operationContainsName bool
+			if operationName == "" {
+				traces = append(traces, trace)
+				continue
+			}
+			for _, span := range trace.Spans {
+				if span.OperationName == operationName {
+					operationContainsName = true
+					break
+				}
+			}
+			if operationContainsName {
+				traces = append(traces, trace)
+			}
 		}
 	}
 	return traces, nil
